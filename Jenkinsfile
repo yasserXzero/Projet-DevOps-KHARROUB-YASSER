@@ -46,16 +46,15 @@ pipeline {
         sh '''
           set -e
 
+          # if curl isn't in my-maven-git image, uncomment:
+          # apt-get update && apt-get install -y curl
+
           java -jar target/*.jar --server.port=${APP_PORT} &
           APP_PID=$!
-
-          # wait a bit for startup
           sleep 8
 
-          # smoke test
-          curl -fsS "http://localhost:${APP_PORT}/" | grep "Bonjour"
+          curl -fsS http://localhost:${APP_PORT}/ | grep "Bonjour"
 
-          # cleanup
           kill $APP_PID
         '''
       }
@@ -73,16 +72,15 @@ pipeline {
       }
     }
 
-    stage('Deploy (optional)') {
+    stage('Deploy (optionnel)') {
       when {
         branch 'main'
       }
       agent any
       steps {
         sh '''
-          set -e
-          docker compose down || true
-          docker compose up -d --build
+          docker-compose down || true
+          docker-compose up -d --build
         '''
       }
     }
@@ -90,24 +88,27 @@ pipeline {
 
   post {
     success {
-      script {
-        notifySlack("✅ SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
+      node {
+        withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_WEBHOOK')]) {
+          sh '''
+            curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"✅ SUCCESS: ${JOB_NAME} #${BUILD_NUMBER}\"}" \
+            "$SLACK_WEBHOOK"
+          '''
+        }
       }
     }
-    failure {
-      script {
-        notifySlack("❌ FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
-      }
-    }
-  }
-}
 
-def notifySlack(String msg) {
-  withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_WEBHOOK')]) {
-    sh """
-      curl -sS -X POST -H 'Content-type: application/json' \
-      --data '{\"text\":\"${msg}\"}' \
-      "\$SLACK_WEBHOOK"
-    """
+    failure {
+      node {
+        withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_WEBHOOK')]) {
+          sh '''
+            curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"❌ FAILED: ${JOB_NAME} #${BUILD_NUMBER}\"}" \
+            "$SLACK_WEBHOOK"
+          '''
+        }
+      }
+    }
   }
 }
