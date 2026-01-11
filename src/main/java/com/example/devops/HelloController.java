@@ -8,6 +8,11 @@ public class HelloController {
 
     @GetMapping("/")
     public String hello() {
-        return "Bonjour et bon courage dans votre projet en DevOps";
+        return "hello hello we changed the text ";
     }
+    @GetMapping("/health")
+    public String health() {
+        return "OK";
+    }
+
 }
