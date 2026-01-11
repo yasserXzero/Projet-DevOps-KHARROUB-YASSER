@@ -44,13 +44,18 @@ pipeline {
       }
       steps {
         sh '''
+          set -e
+
           java -jar target/*.jar --server.port=${APP_PORT} &
           APP_PID=$!
+
+          # wait a bit for startup
           sleep 8
 
-          # Vérifie que l'app répond (nécessite curl dans l'image)
-          curl -f http://localhost:${APP_PORT}/ | grep "Bonjour"
+          # smoke test
+          curl -fsS "http://localhost:${APP_PORT}/" | grep "Bonjour"
 
+          # cleanup
           kill $APP_PID
         '''
       }
@@ -68,17 +73,16 @@ pipeline {
       }
     }
 
-    stage('Deploy (optionnel)') {
+    stage('Deploy (optional)') {
       when {
         branch 'main'
       }
       agent any
       steps {
         sh '''
-          # Option 1 : si tu as déjà Dockerfile + docker-compose.yml dans ton repo
-          # et que docker-compose est dispo sur le node Jenkins
-          docker-compose down || true
-          docker-compose up -d --build
+          set -e
+          docker compose down || true
+          docker compose up -d --build
         '''
       }
     }
@@ -86,23 +90,24 @@ pipeline {
 
   post {
     success {
-      withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_WEBHOOK')]) {
-        sh '''
-          curl -X POST -H 'Content-type: application/json' \
-          --data "{\"text\":\"✅ SUCCESS: ${JOB_NAME} #${BUILD_NUMBER}\"}" \
-          "$SLACK_WEBHOOK"
-        '''
+      script {
+        notifySlack("✅ SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
       }
     }
-
     failure {
-      withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_WEBHOOK')]) {
-        sh '''
-          curl -X POST -H 'Content-type: application/json' \
-          --data "{\"text\":\"❌ FAILED: ${JOB_NAME} #${BUILD_NUMBER}\"}" \
-          "$SLACK_WEBHOOK"
-        '''
+      script {
+        notifySlack("❌ FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
       }
     }
+  }
+}
+
+def notifySlack(String msg) {
+  withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_WEBHOOK')]) {
+    sh """
+      curl -sS -X POST -H 'Content-type: application/json' \
+      --data '{\"text\":\"${msg}\"}' \
+      "\$SLACK_WEBHOOK"
+    """
   }
 }
