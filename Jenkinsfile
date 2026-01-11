@@ -1,81 +1,46 @@
 pipeline {
   agent none
 
-  options {
-    timestamps()
-  }
+  options { timestamps() }
 
   environment {
     APP_PORT = "8085"
+    POST_NODE_LABEL = "built-in"   // change to your node label if needed
   }
 
   stages {
 
     stage('Checkout') {
-      agent {
-        docker {
-          image 'my-maven-git:latest'
-          reuseNode true
-        }
-      }
-      steps {
-        checkout scm
-      }
+      agent { docker { image 'my-maven-git:latest'; reuseNode true } }
+      steps { checkout scm }
     }
 
     stage('Build & Test') {
-      agent {
-        docker {
-          image 'my-maven-git:latest'
-          reuseNode true
-        }
-      }
-      steps {
-        sh 'mvn -B clean test package'
-      }
+      agent { docker { image 'my-maven-git:latest'; reuseNode true } }
+      steps { sh 'mvn -B clean test package' }
     }
 
     stage('Run (Smoke Test)') {
-      agent {
-        docker {
-          image 'my-maven-git:latest'
-          reuseNode true
-        }
-      }
+      agent { docker { image 'my-maven-git:latest'; reuseNode true } }
       steps {
         sh '''
           set -e
-
-          # if curl isn't in my-maven-git image, uncomment:
-          # apt-get update && apt-get install -y curl
-
           java -jar target/*.jar --server.port=${APP_PORT} &
           APP_PID=$!
           sleep 8
-
           curl -fsS http://localhost:${APP_PORT}/ | grep "Bonjour"
-
           kill $APP_PID
         '''
       }
     }
 
     stage('Archive') {
-      agent {
-        docker {
-          image 'my-maven-git:latest'
-          reuseNode true
-        }
-      }
-      steps {
-        archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
-      }
+      agent { docker { image 'my-maven-git:latest'; reuseNode true } }
+      steps { archiveArtifacts artifacts: 'target/*.jar', fingerprint: true }
     }
 
     stage('Deploy (optionnel)') {
-      when {
-        branch 'main'
-      }
+      when { branch 'main' }
       agent any
       steps {
         sh '''
@@ -88,7 +53,7 @@ pipeline {
 
   post {
     success {
-      node {
+      node("${POST_NODE_LABEL}") {
         withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_WEBHOOK')]) {
           sh '''
             curl -X POST -H 'Content-type: application/json' \
@@ -100,7 +65,7 @@ pipeline {
     }
 
     failure {
-      node {
+      node("${POST_NODE_LABEL}") {
         withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_WEBHOOK')]) {
           sh '''
             curl -X POST -H 'Content-type: application/json' \
