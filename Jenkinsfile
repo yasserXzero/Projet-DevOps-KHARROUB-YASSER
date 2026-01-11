@@ -53,27 +53,28 @@ pipeline {
 
   post {
     success {
-      node("${POST_NODE_LABEL}") {
+      node('built-in') {
         withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_WEBHOOK')]) {
-          sh '''
-            curl -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"✅ SUCCESS: ${JOB_NAME} #${BUILD_NUMBER}\"}" \
+          sh """
+            curl -sS -X POST -H 'Content-type: application/json' \
+            --data-raw '{"text":"✅ SUCCESS: ${JOB_NAME} #${BUILD_NUMBER}"}' \
             "$SLACK_WEBHOOK"
-          '''
+          """
         }
       }
     }
-
+  
     failure {
-      node("${POST_NODE_LABEL}") {
+      node('built-in') {
         withCredentials([string(credentialsId: 'slack-webhook', variable: 'SLACK_WEBHOOK')]) {
-          sh '''
-            curl -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"❌ FAILED: ${JOB_NAME} #${BUILD_NUMBER}\"}" \
+          sh """
+            curl -sS -X POST -H 'Content-type: application/json' \
+            --data-raw '{"text":"❌ FAILED: ${JOB_NAME} #${BUILD_NUMBER}"}' \
             "$SLACK_WEBHOOK"
-          '''
+          """
         }
       }
     }
   }
+
 }
