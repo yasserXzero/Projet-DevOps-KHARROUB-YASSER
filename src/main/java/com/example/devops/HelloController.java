@@ -10,4 +10,9 @@ public class HelloController {
     public String hello() {
         return "Bonjour et bon courage dans votre projet en DevOps";
     }
+    @GetMapping("/health")
+    public String health() {
+        return "OK";
+    }
+
 }
